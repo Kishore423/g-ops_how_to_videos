@@ -318,7 +318,21 @@ function adminTemplate() {
             </label>
             <label>
               Password
-              <input name="password" type="password" placeholder="Enter password" autocomplete="current-password" required />
+              <span class="password-field">
+                <input id="admin-password" name="password" type="password" placeholder="Enter password" autocomplete="current-password" required />
+                <button class="icon-button password-toggle" type="button" id="toggle-password" aria-label="Show password" title="Show password">
+                  <svg class="eye-icon eye-open" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                  </svg>
+                  <svg class="eye-icon eye-closed" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="m3 3 18 18"></path>
+                    <path d="M10.6 10.6A3 3 0 0 0 12 15a3 3 0 0 0 2.4-1.2"></path>
+                    <path d="M9.9 5.2A10.6 10.6 0 0 1 12 5c6.5 0 10 7 10 7a17.8 17.8 0 0 1-3 3.8"></path>
+                    <path d="M6.6 6.6C3.6 8.5 2 12 2 12s3.5 7 10 7c1.6 0 3-.4 4.2-.9"></path>
+                  </svg>
+                </button>
+              </span>
             </label>
             ${state.auth.error ? `<p class="form-error">${state.auth.error}</p>` : ""}
             <button class="auth-button" type="submit" ${state.auth.loading ? "disabled" : ""}>
@@ -413,6 +427,17 @@ function bindEvents() {
 
   document.getElementById("admin-login-form")?.addEventListener("submit", (event) => {
     loginAdmin(event).catch(() => showToast("Admin login failed."));
+  });
+
+  document.getElementById("toggle-password")?.addEventListener("click", (event) => {
+    const input = document.getElementById("admin-password");
+    if (!input) return;
+
+    const shouldShow = input.type === "password";
+    input.type = shouldShow ? "text" : "password";
+    event.currentTarget.classList.toggle("is-visible", shouldShow);
+    event.currentTarget.setAttribute("aria-label", shouldShow ? "Hide password" : "Show password");
+    event.currentTarget.setAttribute("title", shouldShow ? "Hide password" : "Show password");
   });
 
   document.getElementById("add-airline-form")?.addEventListener("submit", addAirline);
