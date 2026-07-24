@@ -1,4 +1,3 @@
-const ALLOWED_ADMIN_EMAILS = ["kirubakaran_kishore@sats.com.sg"];
 const STORAGE_KEY = "gops-airlines-v1";
 const SESSION_KEY = "gops-admin-session";
 
@@ -23,7 +22,11 @@ const defaultAirlines = [
 
 let state = {
   view: "home",
-  admin: ALLOWED_ADMIN_EMAILS.includes(localStorage.getItem(SESSION_KEY)),
+  admin: Boolean(localStorage.getItem(SESSION_KEY)),
+  auth: {
+    error: "",
+    loading: false,
+  },
   selectedAirlineId: null,
   airlines: loadAirlines(),
 };
@@ -52,22 +55,40 @@ function setView(view, selectedAirlineId = null) {
   render();
 }
 
-function signIn(email) {
-  const normalized = email.trim().toLowerCase();
-  if (!ALLOWED_ADMIN_EMAILS.includes(normalized)) {
-    showToast("This admin email is not allowed.");
-    return;
-  }
-
-  localStorage.setItem(SESSION_KEY, normalized);
-  state.admin = true;
-  render();
-}
-
 function signOut() {
   localStorage.removeItem(SESSION_KEY);
   state.admin = false;
+  state.auth = { error: "", loading: false };
   state.view = "home";
+  render();
+}
+
+async function loginAdmin(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  state.auth = { ...state.auth, error: "", loading: true };
+  render();
+
+  try {
+    const loginResponse = await fetch("/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: form.username.value,
+        password: form.password.value,
+      }),
+    });
+    const data = await loginResponse.json();
+
+    if (!loginResponse.ok) throw new Error(data.error || "Admin login failed.");
+
+    localStorage.setItem(SESSION_KEY, data.username);
+    state.admin = true;
+    state.auth = { error: "", loading: false };
+  } catch (error) {
+    state.auth = { ...state.auth, error: error.message, loading: false };
+  }
+
   render();
 }
 
@@ -289,15 +310,19 @@ function adminTemplate() {
         ${topBarTemplate()}
         <section class="auth-panel">
           <p class="eyebrow">Admin</p>
-          <h1>Microsoft sign in</h1>
-          <form id="signin-form" class="stack">
+          <h1>Admin login</h1>
+          <form id="admin-login-form" class="stack">
             <label>
-              Email
-              <input name="email" type="email" placeholder="Enter admin email" autocomplete="email" required />
+              Username
+              <input name="username" type="text" placeholder="Enter username" autocomplete="username" required />
             </label>
-            <button class="microsoft-button" type="submit">
-              <span class="ms-mark" aria-hidden="true"></span>
-              Sign in with Microsoft
+            <label>
+              Password
+              <input name="password" type="password" placeholder="Enter password" autocomplete="current-password" required />
+            </label>
+            ${state.auth.error ? `<p class="form-error">${state.auth.error}</p>` : ""}
+            <button class="auth-button" type="submit" ${state.auth.loading ? "disabled" : ""}>
+              ${state.auth.loading ? "Signing in..." : "Sign in"}
             </button>
           </form>
         </section>
@@ -386,9 +411,8 @@ function bindEvents() {
 
   document.getElementById("sign-out")?.addEventListener("click", signOut);
 
-  document.getElementById("signin-form")?.addEventListener("submit", (event) => {
-    event.preventDefault();
-    signIn(event.currentTarget.email.value);
+  document.getElementById("admin-login-form")?.addEventListener("submit", (event) => {
+    loginAdmin(event).catch(() => showToast("Admin login failed."));
   });
 
   document.getElementById("add-airline-form")?.addEventListener("submit", addAirline);

@@ -136,7 +136,7 @@ h2 {
 }
 
 .primary-action,
-.microsoft-button {
+.auth-button {
   min-height: 58px;
   border: 0;
   border-radius: 8px;
@@ -159,10 +159,16 @@ h2 {
 }
 
 .primary-action:hover,
-.microsoft-button:hover {
+.auth-button:hover {
   background: var(--accent-dark);
   box-shadow: 0 12px 28px rgba(0, 120, 212, 0.24);
   transform: translateY(-1px);
+}
+
+.auth-button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+  transform: none;
 }
 
 .primary-action.alt {
@@ -326,26 +332,23 @@ textarea {
   resize: vertical;
 }
 
-.microsoft-button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
+.auth-button {
   text-align: center;
 }
 
-.ms-mark {
-  position: relative;
-  width: 18px;
-  height: 18px;
-  background: linear-gradient(90deg, #f25022 0 48%, transparent 48% 52%, #7fba00 52%);
+.auth-copy {
+  color: var(--muted);
+  line-height: 1.5;
 }
 
-.ms-mark::after {
-  position: absolute;
-  inset: 52% 0 0;
-  background: linear-gradient(90deg, #00a4ef 0 48%, transparent 48% 52%, #ffb900 52%);
-  content: "";
+.form-error {
+  margin: 0;
+  border: 1px solid rgba(180, 35, 24, 0.18);
+  border-radius: 8px;
+  background: rgba(180, 35, 24, 0.08);
+  color: var(--danger);
+  padding: 10px 12px;
+  line-height: 1.4;
 }
 
 .danger-button {
