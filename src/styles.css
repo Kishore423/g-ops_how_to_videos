@@ -97,6 +97,25 @@ button {
   box-shadow: 0 22px 72px rgba(20, 32, 46, 0.13);
 }
 
+.auth-panel {
+  width: min(92vw, 460px);
+  text-align: center;
+}
+
+.auth-panel h1 {
+  margin-bottom: 28px;
+  font-size: clamp(2rem, 6vw, 3rem);
+  line-height: 1;
+}
+
+.auth-panel .stack {
+  width: 100%;
+}
+
+.auth-panel label {
+  text-align: left;
+}
+
 .home-card h1 {
   white-space: nowrap;
   font-size: clamp(2rem, 6vw, 4.1rem);

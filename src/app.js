@@ -307,7 +307,6 @@ function adminTemplate() {
   if (!state.admin) {
     return `
       <main class="shell home-shell">
-        ${topBarTemplate()}
         <section class="auth-panel">
           <p class="eyebrow">Admin</p>
           <h1>Admin login</h1>
@@ -338,6 +337,7 @@ function adminTemplate() {
             <button class="auth-button" type="submit" ${state.auth.loading ? "disabled" : ""}>
               ${state.auth.loading ? "Signing in..." : "Sign in"}
             </button>
+            <button class="ghost-button full-width" type="button" data-view="home">Back to home</button>
           </form>
         </section>
       </main>
