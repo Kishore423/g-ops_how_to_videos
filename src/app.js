@@ -1,4 +1,4 @@
-const ADMIN_EMAIL = "kirubakaran_kishore@sats.com.sg";
+const ALLOWED_ADMIN_EMAILS = ["kirubakaran_kishore@sats.com.sg"];
 const STORAGE_KEY = "gops-airlines-v1";
 const SESSION_KEY = "gops-admin-session";
 
@@ -23,7 +23,7 @@ const defaultAirlines = [
 
 let state = {
   view: "home",
-  admin: localStorage.getItem(SESSION_KEY) === ADMIN_EMAIL,
+  admin: ALLOWED_ADMIN_EMAILS.includes(localStorage.getItem(SESSION_KEY)),
   selectedAirlineId: null,
   airlines: loadAirlines(),
 };
@@ -54,12 +54,12 @@ function setView(view, selectedAirlineId = null) {
 
 function signIn(email) {
   const normalized = email.trim().toLowerCase();
-  if (normalized !== ADMIN_EMAIL) {
+  if (!ALLOWED_ADMIN_EMAILS.includes(normalized)) {
     showToast("This admin email is not allowed.");
     return;
   }
 
-  localStorage.setItem(SESSION_KEY, ADMIN_EMAIL);
+  localStorage.setItem(SESSION_KEY, normalized);
   state.admin = true;
   render();
 }
@@ -204,7 +204,7 @@ function homeTemplate() {
 function topBarTemplate() {
   return `
     <nav class="topbar" aria-label="Main navigation">
-      <button class="ghost-button" data-view="home">G-Ops</button>
+      ${state.view === "home" ? `<span aria-hidden="true"></span>` : `<button class="ghost-button" data-view="home">Home</button>`}
       <div class="topbar-actions">
         ${
           state.admin
@@ -293,7 +293,7 @@ function adminTemplate() {
           <form id="signin-form" class="stack">
             <label>
               Email
-              <input name="email" type="email" value="${ADMIN_EMAIL}" autocomplete="email" required />
+              <input name="email" type="email" placeholder="Enter admin email" autocomplete="email" required />
             </label>
             <button class="microsoft-button" type="submit">
               <span class="ms-mark" aria-hidden="true"></span>
