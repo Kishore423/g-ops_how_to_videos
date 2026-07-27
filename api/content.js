@@ -114,6 +114,11 @@ async function updateForm(response, body) {
     }),
   );
 
+  if (body.skipReload) {
+    json(response, 200, { ok: true });
+    return;
+  }
+
   json(response, 200, await loadContent());
 }
 
@@ -174,6 +179,11 @@ async function confirmUpload(response, body) {
   });
   if (error) throw new Error(error.message);
 
+  if (body.skipReload) {
+    json(response, 200, { ok: true });
+    return;
+  }
+
   json(response, 200, await loadContent());
 }
 
@@ -202,6 +212,11 @@ async function confirmReplace(response, body) {
 
   if (current?.storage_path && current.storage_path !== storagePath) {
     await supabase.storage.from(VIDEO_BUCKET).remove([current.storage_path]);
+  }
+
+  if (body.skipReload) {
+    json(response, 200, { ok: true });
+    return;
   }
 
   json(response, 200, await loadContent());

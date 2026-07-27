@@ -1,8 +1,9 @@
-import { createClient } from "@supabase/supabase-js";
-
 const STORAGE_KEY = "gops-airlines-v1";
 const GROUP_STORAGE_KEY = "gops-form-groups-v1";
 const SESSION_KEY = "gops-admin-session";
+const SUPABASE_URL = "https://nlhnqebpetugfbsygiqa.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_8Z-LkjH9HWzbCuvyeZGIMQ_npvIGSDV";
+const VIDEO_BUCKET = "gops-videos";
 
 const defaultGroups = [
   {
@@ -52,6 +53,7 @@ let state = {
 };
 
 let uploadClient = null;
+let uploadClientPromise = null;
 
 function loadAirlines() {
   const saved = localStorage.getItem(STORAGE_KEY);
@@ -166,21 +168,73 @@ function applyRemoteContent(data) {
     loading: false,
     supabase: data.supabase || state.content.supabase,
   };
-
-  if (state.content.supabase?.url && state.content.supabase?.publishableKey) {
-    uploadClient = createClient(state.content.supabase.url, state.content.supabase.publishableKey);
-  }
 }
 
-async function loadRemoteContent() {
-  state.content = { ...state.content, error: "", loading: true };
-  render();
+function publicVideoUrl(storagePath) {
+  if (!storagePath) return "";
+  const encodedPath = storagePath
+    .split("/")
+    .map((part) => encodeURIComponent(part))
+    .join("/");
+  return `${SUPABASE_URL}/storage/v1/object/public/${VIDEO_BUCKET}/${encodedPath}`;
+}
+
+async function fetchSupabaseTable(table, query) {
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${query}`, {
+    headers: {
+      apikey: SUPABASE_PUBLISHABLE_KEY,
+      Authorization: `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
+    },
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || "Content could not be loaded.");
+  return data;
+}
+
+async function fetchPublicContent() {
+  const [groups, forms, videos] = await Promise.all([
+    fetchSupabaseTable("gops_form_groups", "select=*&order=sort_order.asc"),
+    fetchSupabaseTable("gops_forms", "select=*&order=created_at.asc"),
+    fetchSupabaseTable("gops_videos", "select=*&order=sort_order.asc&order=created_at.asc"),
+  ]);
+
+  return {
+    supabase: {
+      url: SUPABASE_URL,
+      publishableKey: SUPABASE_PUBLISHABLE_KEY,
+      bucket: VIDEO_BUCKET,
+    },
+    groups: groups.map((group) => ({
+      id: group.id,
+      name: group.name,
+      singleAirline: group.single_airline,
+    })),
+    airlines: forms.map((form) => ({
+      id: form.id,
+      name: form.name,
+      group: form.group_id,
+      gateForms: [],
+      videos: videos
+        .filter((video) => video.form_id === form.id)
+        .map((video) => ({
+          id: video.id,
+          title: video.title || "",
+          videoName: video.file_name || "",
+          storagePath: video.storage_path || "",
+          videoUrl: publicVideoUrl(video.storage_path),
+        })),
+    })),
+  };
+}
+
+async function loadRemoteContent(options = {}) {
+  if (options.showLoading !== false) {
+    state.content = { ...state.content, error: "", loading: true };
+    render();
+  }
 
   try {
-    const response = await fetch("/api/content");
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || "Content could not be loaded.");
-    applyRemoteContent(data);
+    applyRemoteContent(await fetchPublicContent());
   } catch (error) {
     state.content = { ...state.content, error: error.message, loading: false };
   }
@@ -305,6 +359,7 @@ async function updateAirline(event, airlineId) {
   await contentRequest({
     action: "updateForm",
     formId: airline.id,
+    skipReload: true,
     videos: videos.map((video) => ({
       id: video.id,
       title: form.elements[`videoTitle-${video.id}`]?.value.trim() || "",
@@ -325,6 +380,7 @@ async function updateAirline(event, airlineId) {
       title: titleInput?.value.trim() || "",
       fileName: replacement.name,
       storagePath: upload.storagePath,
+      skipReload: true,
     });
   }
 
@@ -342,9 +398,11 @@ async function updateAirline(event, airlineId) {
       title: row.querySelector("[data-new-video-title]")?.value.trim() || "",
       fileName: newVideoFile.name,
       storagePath: upload.storagePath,
+      skipReload: true,
     });
   }
 
+  await loadRemoteContent({ showLoading: false });
   showToast(`${airline.name} updated.`);
   render();
 }
@@ -359,10 +417,16 @@ async function createSignedUpload(formId, file) {
 }
 
 async function uploadToSupabase(upload, file) {
+  if (!uploadClientPromise) {
+    uploadClientPromise = import("@supabase/supabase-js").then(({ createClient }) =>
+      createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY),
+    );
+  }
+  uploadClient = uploadClient || (await uploadClientPromise);
   if (!uploadClient) throw new Error("Video storage is not configured.");
 
   const { error } = await uploadClient.storage
-    .from(state.content.supabase.bucket)
+    .from(VIDEO_BUCKET)
     .uploadToSignedUrl(upload.path, upload.token, file, {
       contentType: file.type || "video/mp4",
     });
