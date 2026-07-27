@@ -544,8 +544,14 @@ function adminAirlineTemplate(airline) {
             : `<p class="file-status">No video uploaded</p>`
         }
       </div>
-      <section class="video-editor add-video-editor">
-        <p class="field-group-title">Add video</p>
+      <button class="secondary-button full-width add-video-button" type="button" data-add-video="${airline.id}">
+        Add video
+      </button>
+      <section class="video-editor add-video-editor" data-add-video-panel="${airline.id}" hidden>
+        <div class="video-editor-header">
+          <p class="field-group-title">New video</p>
+          <button class="ghost-button small-button" type="button" data-cancel-video="${airline.id}">Cancel</button>
+        </div>
         <label>
           Video title optional
           <input name="newVideoTitle" placeholder="Walkthrough Video" />
@@ -627,6 +633,31 @@ function bindEvents() {
     button.addEventListener("click", () => {
       const [airlineId, videoId] = button.dataset.deleteVideo.split(":");
       deleteVideo(airlineId, videoId).catch(() => showToast("Video could not be removed."));
+    });
+  });
+
+  document.querySelectorAll("[data-add-video]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const panel = document.querySelector(`[data-add-video-panel="${button.dataset.addVideo}"]`);
+      if (!panel) return;
+
+      panel.hidden = false;
+      button.hidden = true;
+      panel.querySelector("input")?.focus();
+    });
+  });
+
+  document.querySelectorAll("[data-cancel-video]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const panel = document.querySelector(`[data-add-video-panel="${button.dataset.cancelVideo}"]`);
+      const addButton = document.querySelector(`[data-add-video="${button.dataset.cancelVideo}"]`);
+      if (!panel || !addButton) return;
+
+      panel.hidden = true;
+      addButton.hidden = false;
+      panel.querySelectorAll("input").forEach((input) => {
+        input.value = "";
+      });
     });
   });
 }

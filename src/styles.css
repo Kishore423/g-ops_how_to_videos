@@ -37,6 +37,10 @@ button {
   cursor: pointer;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 .shell {
   min-height: 100svh;
   padding: clamp(16px, 3vw, 32px);
@@ -328,7 +332,15 @@ h2 {
 }
 
 .add-video-editor {
+  border-color: rgba(0, 120, 212, 0.28);
   background: white;
+  box-shadow: 0 14px 34px rgba(20, 32, 46, 0.1);
+}
+
+.add-video-button {
+  border-style: dashed;
+  color: var(--accent-dark);
+  font-weight: 750;
 }
 
 .video-editor-header {
