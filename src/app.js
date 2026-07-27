@@ -239,7 +239,7 @@ function topBarTemplate() {
       <div class="topbar-actions">
         ${
           state.admin
-            ? `<button class="ghost-button" data-view="admin">Admin</button><button class="ghost-button" id="sign-out">Sign out</button>`
+            ? `${state.view === "admin" ? "" : `<button class="ghost-button" data-view="admin">Admin</button>`}<button class="ghost-button" id="sign-out">Sign out</button>`
             : `<button class="ghost-button" data-view="admin">Admin</button>`
         }
       </div>
@@ -358,34 +358,47 @@ function adminTemplate() {
     <main class="shell">
       ${topBarTemplate()}
       <section class="workspace admin-layout">
-        <header class="section-header">
+        <header class="section-header admin-hero">
           <div>
             <p class="eyebrow">Admin</p>
             <h1>Airline content</h1>
+            <p class="section-copy">Manage airline gate forms and replace training videos.</p>
           </div>
-          <button class="secondary-button" data-view="home">Back</button>
         </header>
-        <form id="add-airline-form" class="admin-form">
-          <h2>Add airline</h2>
-          <label>
-            Airline
-            <input name="airlineName" placeholder="KE" required />
-          </label>
-          <label>
-            Category
-            <select name="airlineGroup">
-              <option value="oal">OAL excluding VJ</option>
-              <option value="vj">VJ</option>
-            </select>
-          </label>
-          <label>
-            Gate form
-            <input name="gateForm" placeholder="Gate form name or link" />
-          </label>
-          <button class="primary-action compact" type="submit">Add airline</button>
-        </form>
-        <div class="admin-list">
-          ${state.airlines.map(adminAirlineTemplate).join("")}
+        <div class="admin-shell">
+          <aside class="admin-sidebar">
+            <form id="add-airline-form" class="admin-form">
+              <h2>Add airline</h2>
+              <label>
+                Airline code
+                <input name="airlineName" placeholder="KE" required />
+              </label>
+              <label>
+                Category
+                <select name="airlineGroup">
+                  <option value="oal">OAL excluding VJ</option>
+                  <option value="vj">VJ</option>
+                </select>
+              </label>
+              <label>
+                Gate form
+                <input name="gateForm" placeholder="Gate form name or link" />
+              </label>
+              <button class="primary-action compact" type="submit">Add airline</button>
+            </form>
+          </aside>
+          <section class="admin-main" aria-labelledby="airline-list-title">
+            <div class="admin-section-title">
+              <div>
+                <p class="eyebrow">Library</p>
+                <h2 id="airline-list-title">Existing airlines</h2>
+              </div>
+              <span class="count-badge">${state.airlines.length} airline${state.airlines.length === 1 ? "" : "s"}</span>
+            </div>
+            <div class="admin-list">
+              ${state.airlines.map(adminAirlineTemplate).join("")}
+            </div>
+          </section>
         </div>
       </section>
     </main>
@@ -396,7 +409,10 @@ function adminAirlineTemplate(airline) {
   return `
     <form class="admin-form compact-form" data-edit="${airline.id}">
       <div class="admin-form-header">
-        <h2>${airline.name}</h2>
+        <div>
+          <p class="eyebrow">${airline.group === "vj" ? "VJ" : "OAL"}</p>
+          <h2>${airline.name}</h2>
+        </div>
         <button class="danger-button" type="button" data-delete="${airline.id}">Delete</button>
       </div>
       <label>
@@ -418,7 +434,7 @@ function adminAirlineTemplate(airline) {
         Replace video
         <input name="video" type="file" accept="video/*" />
       </label>
-      <p class="file-status">${airline.videoName}</p>
+      <p class="file-status">${airline.videoName || "No video uploaded"}</p>
       <button class="secondary-button full-width" type="submit">Update</button>
     </form>
   `;
