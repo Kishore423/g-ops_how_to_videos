@@ -107,7 +107,6 @@ function addAirline(event) {
   const form = event.currentTarget;
   const name = form.airlineName.value.trim().toUpperCase();
   const group = form.airlineGroup.value;
-  const gateForm = form.gateForm.value.trim();
 
   if (!name) return;
 
@@ -116,7 +115,7 @@ function addAirline(event) {
     id,
     name,
     group,
-    gateForms: gateForm ? [gateForm] : [],
+    gateForms: [],
     videoName: "No video uploaded",
     videoUrl: "",
   });
@@ -132,13 +131,8 @@ async function updateAirline(event, airlineId) {
   const airline = state.airlines.find((item) => item.id === airlineId);
   if (!airline) return;
 
-  const gateForms = form.gateForms.value
-    .split("\n")
-    .map((item) => item.trim())
-    .filter(Boolean);
   airline.name = form.airlineName.value.trim().toUpperCase() || airline.name;
   airline.group = form.airlineGroup.value;
-  airline.gateForms = gateForms;
 
   const videoFile = form.video.files[0];
   if (videoFile) {
@@ -380,10 +374,6 @@ function adminTemplate() {
                   <option value="vj">VJ</option>
                 </select>
               </label>
-              <label>
-                Gate form
-                <input name="gateForm" placeholder="Gate form name or link" />
-              </label>
               <button class="primary-action compact" type="submit">Add airline</button>
             </form>
           </aside>
@@ -425,10 +415,6 @@ function adminAirlineTemplate(airline) {
           <option value="oal" ${airline.group === "oal" ? "selected" : ""}>OAL excluding VJ</option>
           <option value="vj" ${airline.group === "vj" ? "selected" : ""}>VJ</option>
         </select>
-      </label>
-      <label>
-        Gate forms
-        <textarea name="gateForms" rows="3">${airline.gateForms.join("\n")}</textarea>
       </label>
       <label>
         Replace video
