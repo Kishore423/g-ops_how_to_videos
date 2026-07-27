@@ -391,6 +391,8 @@ h2 {
 }
 
 .admin-sidebar {
+  display: grid;
+  gap: 14px;
   position: sticky;
   top: 24px;
 }
@@ -460,6 +462,13 @@ label {
   font-weight: 650;
 }
 
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink);
+}
+
 input,
 select,
 textarea {
@@ -469,6 +478,12 @@ textarea {
   background: white;
   color: var(--ink);
   padding: 12px;
+}
+
+.checkbox-row input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
 }
 
 textarea {

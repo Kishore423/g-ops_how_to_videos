@@ -1,5 +1,19 @@
 const STORAGE_KEY = "gops-airlines-v1";
+const GROUP_STORAGE_KEY = "gops-form-groups-v1";
 const SESSION_KEY = "gops-admin-session";
+
+const defaultGroups = [
+  {
+    id: "oal",
+    name: "OAL(excluding VJ)",
+    singleAirline: false,
+  },
+  {
+    id: "vj",
+    name: "VJ",
+    singleAirline: true,
+  },
+];
 
 const defaultAirlines = [
   {
@@ -26,6 +40,7 @@ let state = {
     loading: false,
   },
   selectedAirlineId: null,
+  groups: loadGroups(),
   airlines: loadAirlines(),
 };
 
@@ -85,8 +100,41 @@ function getAirlineVideos(airline) {
   return airline.videos;
 }
 
+function loadGroups() {
+  const saved = localStorage.getItem(GROUP_STORAGE_KEY);
+  if (!saved) return defaultGroups;
+
+  try {
+    const parsed = JSON.parse(saved);
+    return Array.isArray(parsed) && parsed.length ? parsed.map(normalizeGroup) : defaultGroups;
+  } catch {
+    return defaultGroups;
+  }
+}
+
+function normalizeGroup(group) {
+  return {
+    id: group.id || slugify(group.name || "group"),
+    name: group.name || "Form group",
+    singleAirline: Boolean(group.singleAirline),
+  };
+}
+
 function saveAirlines() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state.airlines));
+}
+
+function saveGroups() {
+  localStorage.setItem(GROUP_STORAGE_KEY, JSON.stringify(state.groups));
+}
+
+function slugify(value) {
+  const slug = value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug || `group-${Date.now()}`;
 }
 
 function escapeHtml(value) {
@@ -110,12 +158,22 @@ function setView(view, selectedAirlineId = null) {
 
 function openGroupVideo(group) {
   const airlines = state.airlines.filter((airline) => airline.group === group);
-  if (airlines.length === 1) {
+  const formGroup = getGroup(group);
+
+  if (airlines.length === 1 || (formGroup?.singleAirline && airlines.length)) {
     setView("airline", airlines[0].id);
     return;
   }
 
   setView(group);
+}
+
+function getGroup(groupId) {
+  return state.groups.find((group) => group.id === groupId);
+}
+
+function getGroupAirlines(groupId) {
+  return state.airlines.filter((airline) => airline.group === groupId);
 }
 
 function signOut() {
@@ -174,6 +232,28 @@ function addAirline(event) {
   saveAirlines();
   form.reset();
   showToast(`${name} added.`);
+  render();
+}
+
+function addGroup(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const name = form.groupName.value.trim();
+  if (!name) return;
+
+  let id = slugify(name);
+  if (state.groups.some((group) => group.id === id)) {
+    id = `${id}-${Date.now()}`;
+  }
+
+  state.groups.push({
+    id,
+    name,
+    singleAirline: form.singleAirline.checked,
+  });
+  saveGroups();
+  form.reset();
+  showToast(`${name} group added.`);
   render();
 }
 
@@ -325,11 +405,18 @@ function homeTemplate() {
         <p class="eyebrow">SATS operations</p>
         <h1 id="home-title">G-Ops forms</h1>
         <div class="home-actions">
-          <button class="primary-action" data-group-video="oal">OAL(excluding VJ)</button>
-          <button class="primary-action alt" data-group-video="vj">VJ</button>
+          ${state.groups.map(homeGroupButtonTemplate).join("")}
         </div>
       </section>
     </main>
+  `;
+}
+
+function homeGroupButtonTemplate(group, index) {
+  return `
+    <button class="primary-action ${index % 2 ? "alt" : ""}" data-group-video="${group.id}">
+      ${escapeHtml(group.name)}
+    </button>
   `;
 }
 
@@ -348,9 +435,10 @@ function topBarTemplate() {
   `;
 }
 
-function airlineListTemplate(group) {
-  const title = group === "vj" ? "VJ" : "OAL forms";
-  const airlines = state.airlines.filter((airline) => airline.group === group);
+function airlineListTemplate(groupId) {
+  const group = getGroup(groupId);
+  const title = group?.name || "Form group";
+  const airlines = getGroupAirlines(groupId);
 
   return `
     <main class="shell">
@@ -359,7 +447,7 @@ function airlineListTemplate(group) {
         <header class="section-header">
           <div>
             <p class="eyebrow">Gate process</p>
-            <h1>${title}</h1>
+            <h1>${escapeHtml(title)}</h1>
           </div>
           <button class="secondary-button" data-view="home">Back</button>
         </header>
@@ -389,7 +477,11 @@ function airlineCardTemplate(airline) {
 }
 
 function airlineDetailTemplate(airline) {
-  const pageTitle = airline.group === "oal" ? "OAL(excluding VJ)" : airline.name;
+  const group = getGroup(airline.group);
+  const groupAirlines = getGroupAirlines(airline.group);
+  const showGroupTitle = group?.singleAirline || groupAirlines.length === 1;
+  const pageTitle = showGroupTitle ? group?.name || airline.name : airline.name;
+  const eyebrow = showGroupTitle ? "Form group" : "Airline";
   const videos = getAirlineVideos(airline);
 
   return `
@@ -398,10 +490,10 @@ function airlineDetailTemplate(airline) {
       <section class="workspace detail-layout">
         <header class="section-header">
           <div>
-            <p class="eyebrow">Airline</p>
+            <p class="eyebrow">${eyebrow}</p>
             <h1>${escapeHtml(pageTitle)}</h1>
           </div>
-          <button class="secondary-button" data-view="${airline.group}">Back</button>
+          <button class="secondary-button" data-view="${showGroupTitle ? "home" : airline.group}">Back</button>
         </header>
         ${
           videos.length
@@ -484,6 +576,18 @@ function adminTemplate() {
         </header>
         <div class="admin-shell">
           <aside class="admin-sidebar">
+            <form id="add-group-form" class="admin-form">
+              <h2>Create form group</h2>
+              <label>
+                Group name
+                <input name="groupName" placeholder="OAL(excluding VJ)" required />
+              </label>
+              <label class="checkbox-row">
+                <input name="singleAirline" type="checkbox" />
+                <span>This group only has one airline</span>
+              </label>
+              <button class="primary-action compact" type="submit">Create form group</button>
+            </form>
             <form id="add-airline-form" class="admin-form">
               <h2>Add airline</h2>
               <label>
@@ -493,8 +597,7 @@ function adminTemplate() {
               <label>
                 Category
                 <select name="airlineGroup">
-                  <option value="oal">OAL excluding VJ</option>
-                  <option value="vj">VJ</option>
+                  ${groupOptionsTemplate()}
                 </select>
               </label>
               <button class="primary-action compact" type="submit">Add airline</button>
@@ -520,12 +623,13 @@ function adminTemplate() {
 
 function adminAirlineTemplate(airline) {
   const videos = getAirlineVideos(airline);
+  const group = getGroup(airline.group);
 
   return `
     <form class="admin-form compact-form" data-edit="${airline.id}">
       <div class="admin-form-header">
         <div>
-          <p class="eyebrow">${airline.group === "vj" ? "VJ" : "OAL"}</p>
+          <p class="eyebrow">${escapeHtml(group?.name || "Group")}</p>
           <h2>${escapeHtml(airline.name)}</h2>
         </div>
         <button class="danger-button" type="button" data-delete="${airline.id}">Delete</button>
@@ -537,8 +641,7 @@ function adminAirlineTemplate(airline) {
       <label>
         Category
         <select name="airlineGroup">
-          <option value="oal" ${airline.group === "oal" ? "selected" : ""}>OAL excluding VJ</option>
-          <option value="vj" ${airline.group === "vj" ? "selected" : ""}>VJ</option>
+          ${groupOptionsTemplate(airline.group)}
         </select>
       </label>
       <div class="video-editor-list">
@@ -556,6 +659,18 @@ function adminAirlineTemplate(airline) {
       <button class="secondary-button full-width" type="submit">Update</button>
     </form>
   `;
+}
+
+function groupOptionsTemplate(selectedGroup = state.groups[0]?.id) {
+  return state.groups
+    .map(
+      (group) => `
+        <option value="${group.id}" ${group.id === selectedGroup ? "selected" : ""}>
+          ${escapeHtml(group.name)}
+        </option>
+      `,
+    )
+    .join("");
 }
 
 function adminVideoTemplate(airline, video) {
@@ -627,6 +742,7 @@ function bindEvents() {
   });
 
   document.getElementById("add-airline-form")?.addEventListener("submit", addAirline);
+  document.getElementById("add-group-form")?.addEventListener("submit", addGroup);
 
   document.querySelectorAll("[data-edit]").forEach((form) => {
     form.addEventListener("submit", (event) => {
@@ -672,13 +788,12 @@ function render() {
   const selectedAirline = state.airlines.find((airline) => airline.id === state.selectedAirlineId);
   const templates = {
     home: homeTemplate,
-    oal: () => airlineListTemplate("oal"),
-    vj: () => airlineListTemplate("vj"),
     admin: adminTemplate,
     airline: () => (selectedAirline ? airlineDetailTemplate(selectedAirline) : homeTemplate()),
   };
 
-  document.getElementById("app").innerHTML = templates[state.view]();
+  const template = templates[state.view] || (() => airlineListTemplate(state.view));
+  document.getElementById("app").innerHTML = template();
   bindEvents();
 }
 
