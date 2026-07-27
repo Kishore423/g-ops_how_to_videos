@@ -1,6 +1,7 @@
 const STORAGE_KEY = "gops-airlines-v1";
 const GROUP_STORAGE_KEY = "gops-form-groups-v1";
 const SESSION_KEY = "gops-admin-session";
+const CONTENT_CACHE_KEY = "gops-remote-content-v1";
 const SUPABASE_URL = "https://nlhnqebpetugfbsygiqa.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_8Z-LkjH9HWzbCuvyeZGIMQ_npvIGSDV";
 const VIDEO_BUCKET = "gops-videos";
@@ -137,6 +138,30 @@ function saveGroups() {
   localStorage.setItem(GROUP_STORAGE_KEY, JSON.stringify(state.groups));
 }
 
+function cachedContent() {
+  const saved = localStorage.getItem(CONTENT_CACHE_KEY);
+  if (!saved) return null;
+
+  try {
+    const parsed = JSON.parse(saved);
+    return parsed && Array.isArray(parsed.groups) && Array.isArray(parsed.airlines) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveContentCache(data) {
+  localStorage.setItem(
+    CONTENT_CACHE_KEY,
+    JSON.stringify({
+      savedAt: Date.now(),
+      groups: data.groups,
+      airlines: data.airlines,
+      supabase: data.supabase,
+    }),
+  );
+}
+
 function adminToken() {
   return localStorage.getItem(SESSION_KEY) || "";
 }
@@ -168,6 +193,7 @@ function applyRemoteContent(data) {
     loading: false,
     supabase: data.supabase || state.content.supabase,
   };
+  saveContentCache(state.content.supabase ? { ...data, supabase: state.content.supabase } : data);
 }
 
 function publicVideoUrl(storagePath) {
@@ -191,7 +217,7 @@ async function fetchSupabaseTable(table, query) {
   return data;
 }
 
-async function fetchPublicContent() {
+async function fetchDirectSupabaseContent() {
   const [groups, forms, videos] = await Promise.all([
     fetchSupabaseTable("gops_form_groups", "select=*&order=sort_order.asc"),
     fetchSupabaseTable("gops_forms", "select=*&order=created_at.asc"),
@@ -227,8 +253,23 @@ async function fetchPublicContent() {
   };
 }
 
+async function fetchPublicContent() {
+  try {
+    const response = await fetch("/api/content");
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Content could not be loaded.");
+    return data;
+  } catch {
+    return fetchDirectSupabaseContent();
+  }
+}
+
 async function loadRemoteContent(options = {}) {
-  if (options.showLoading !== false) {
+  const cache = cachedContent();
+  if (cache && !state.content.supabase) {
+    applyRemoteContent(cache);
+    render();
+  } else if (options.showLoading !== false) {
     state.content = { ...state.content, error: "", loading: true };
     render();
   }
@@ -581,7 +622,7 @@ function videoPlayerTemplate(video) {
       <div class="video-panel">
         ${
           video.videoUrl
-            ? `<video src="${escapeHtml(video.videoUrl)}" controls playsinline></video>`
+            ? `<video src="${escapeHtml(video.videoUrl)}" controls playsinline preload="none"></video>`
             : `<div class="video-placeholder">Video not uploaded yet</div>`
         }
       </div>

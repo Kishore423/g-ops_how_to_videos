@@ -242,6 +242,7 @@ async function deleteVideo(response, body) {
 module.exports = async function handler(request, response) {
   try {
     if (request.method === "GET") {
+      response.setHeader("Cache-Control", "s-maxage=10, stale-while-revalidate=120");
       json(response, 200, await loadContent());
       return;
     }
