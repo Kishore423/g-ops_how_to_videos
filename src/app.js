@@ -7,7 +7,7 @@ const defaultAirlines = [
     name: "KE",
     group: "oal",
     gateForms: ["Gate form"],
-    videoName: "Upload KE video",
+    videoName: "",
     videoUrl: "",
   },
   {
@@ -15,7 +15,7 @@ const defaultAirlines = [
     name: "VJ",
     group: "vj",
     gateForms: ["Gate form"],
-    videoName: "Upload VJ video",
+    videoName: "",
     videoUrl: "",
   },
 ];
@@ -53,6 +53,16 @@ function setView(view, selectedAirlineId = null) {
   state.view = view;
   state.selectedAirlineId = selectedAirlineId;
   render();
+}
+
+function openGroupVideo(group) {
+  const airlines = state.airlines.filter((airline) => airline.group === group);
+  if (airlines.length === 1) {
+    setView("airline", airlines[0].id);
+    return;
+  }
+
+  setView(group);
 }
 
 function signOut() {
@@ -214,8 +224,8 @@ function homeTemplate() {
         <p class="eyebrow">SATS operations</p>
         <h1 id="home-title">G-Ops forms</h1>
         <div class="home-actions">
-          <button class="primary-action" data-view="oal">OAL <span>excluding VJ</span></button>
-          <button class="primary-action alt" data-view="vj">VJ</button>
+          <button class="primary-action" data-group-video="oal">OAL <span>excluding VJ</span></button>
+          <button class="primary-action alt" data-group-video="vj">VJ</button>
         </div>
       </section>
     </main>
@@ -291,7 +301,7 @@ function airlineDetailTemplate(airline) {
           ${
             videoUrls.get(airline.id)
               ? `<video src="${videoUrls.get(airline.id)}" controls playsinline></video>`
-              : `<div class="video-placeholder">${airline.videoName}</div>`
+              : `<div class="video-placeholder">Video not uploaded yet</div>`
           }
         </div>
         <div class="form-list">
@@ -417,6 +427,10 @@ function adminAirlineTemplate(airline) {
 function bindEvents() {
   document.querySelectorAll("[data-view]").forEach((button) => {
     button.addEventListener("click", () => setView(button.dataset.view));
+  });
+
+  document.querySelectorAll("[data-group-video]").forEach((button) => {
+    button.addEventListener("click", () => openGroupVideo(button.dataset.groupVideo));
   });
 
   document.querySelectorAll("[data-airline]").forEach((button) => {
