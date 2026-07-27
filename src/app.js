@@ -298,10 +298,6 @@ function airlineDetailTemplate(airline) {
               : `<div class="video-placeholder">Video not uploaded yet</div>`
           }
         </div>
-        <div class="form-list">
-          <h2>Gate forms</h2>
-          ${airline.gateForms.map((form) => `<p>${form}</p>`).join("") || `<p>No gate forms added.</p>`}
-        </div>
       </section>
     </main>
   `;

@@ -295,17 +295,11 @@ h2 {
   font-weight: 700;
 }
 
-.form-list,
 .admin-form {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
   padding: clamp(16px, 3vw, 24px);
-}
-
-.form-list p {
-  margin-bottom: 8px;
-  color: var(--muted);
 }
 
 .admin-layout {
