@@ -444,7 +444,7 @@ async function updateAirline(event, airlineId) {
   }
 
   await loadRemoteContent({ showLoading: false });
-  showToast(`${airline.name} updated.`);
+  showToast(`${airline.name} form updated successfully.`);
   render();
 }
 
@@ -484,7 +484,10 @@ function deleteAirline(airlineId) {
     formId: airline.id,
     groupId: airline.group,
   })
-    .then(() => setView("admin"))
+    .then(() => {
+      setView("admin");
+      showToast(`${airline.name} form deleted successfully.`);
+    })
     .catch((error) => showToast(error.message));
 }
 
@@ -500,6 +503,8 @@ async function deleteVideo(airlineId, videoId) {
 function showToast(message) {
   const toast = document.createElement("div");
   toast.className = "toast";
+  toast.setAttribute("role", "status");
+  toast.setAttribute("aria-live", "polite");
   toast.textContent = message;
   document.body.appendChild(toast);
   setTimeout(() => toast.remove(), 2600);
