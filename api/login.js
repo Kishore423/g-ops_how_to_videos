@@ -1,4 +1,5 @@
 const crypto = require("crypto");
+const { createAdminToken } = require("./_auth");
 
 function json(response, statusCode, body) {
   response.status(statusCode).json(body);
@@ -34,5 +35,5 @@ module.exports = async function handler(request, response) {
     return;
   }
 
-  json(response, 200, { username });
+  json(response, 200, { username, token: createAdminToken(username) });
 };

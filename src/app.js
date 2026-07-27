@@ -1,3 +1,5 @@
+import { createClient } from "@supabase/supabase-js";
+
 const STORAGE_KEY = "gops-airlines-v1";
 const GROUP_STORAGE_KEY = "gops-form-groups-v1";
 const SESSION_KEY = "gops-admin-session";
@@ -39,12 +41,17 @@ let state = {
     error: "",
     loading: false,
   },
+  content: {
+    error: "",
+    loading: true,
+    supabase: null,
+  },
   selectedAirlineId: null,
   groups: loadGroups(),
   airlines: loadAirlines(),
 };
 
-const videoUrls = new Map();
+let uploadClient = null;
 
 function loadAirlines() {
   const saved = localStorage.getItem(STORAGE_KEY);
@@ -128,6 +135,59 @@ function saveGroups() {
   localStorage.setItem(GROUP_STORAGE_KEY, JSON.stringify(state.groups));
 }
 
+function adminToken() {
+  return localStorage.getItem(SESSION_KEY) || "";
+}
+
+function adminHeaders() {
+  return {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${adminToken()}`,
+  };
+}
+
+async function contentRequest(body) {
+  const response = await fetch("/api/content", {
+    method: "POST",
+    headers: adminHeaders(),
+    body: JSON.stringify(body),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Content update failed.");
+  if (data.groups || data.airlines) applyRemoteContent(data);
+  return data;
+}
+
+function applyRemoteContent(data) {
+  state.groups = Array.isArray(data.groups) ? data.groups.map(normalizeGroup) : defaultGroups;
+  state.airlines = Array.isArray(data.airlines) ? data.airlines.map(normalizeAirline) : defaultAirlines;
+  state.content = {
+    error: "",
+    loading: false,
+    supabase: data.supabase || state.content.supabase,
+  };
+
+  if (state.content.supabase?.url && state.content.supabase?.publishableKey) {
+    uploadClient = createClient(state.content.supabase.url, state.content.supabase.publishableKey);
+  }
+}
+
+async function loadRemoteContent() {
+  state.content = { ...state.content, error: "", loading: true };
+  render();
+
+  try {
+    const response = await fetch("/api/content");
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Content could not be loaded.");
+    applyRemoteContent(data);
+  } catch (error) {
+    state.content = { ...state.content, error: error.message, loading: false };
+  }
+
+  render();
+}
+
 function slugify(value) {
   const slug = value
     .toLowerCase()
@@ -203,7 +263,7 @@ async function loginAdmin(event) {
 
     if (!loginResponse.ok) throw new Error(data.error || "Admin login failed.");
 
-    localStorage.setItem(SESSION_KEY, data.username);
+    localStorage.setItem(SESSION_KEY, data.token);
     state.admin = true;
     state.auth = { error: "", loading: false };
   } catch (error) {
@@ -219,29 +279,17 @@ function addGroup(event) {
   const name = form.groupName.value.trim();
   if (!name) return;
 
-  let id = slugify(name);
-  if (state.groups.some((group) => group.id === id)) {
-    id = `${id}-${Date.now()}`;
-  }
-
-  const singleAirline = form.singleAirline.checked;
-  state.groups.push({
-    id,
+  contentRequest({
+    action: "createGroup",
     name,
-    singleAirline,
-  });
-  state.airlines.push({
-    id: `${id}-form`,
-    name,
-    group: id,
-    gateForms: [],
-    videos: [],
-  });
-  saveGroups();
-  saveAirlines();
-  form.reset();
-  showToast(`${name} group added.`);
-  render();
+    singleAirline: form.singleAirline.checked,
+  })
+    .then(() => {
+      form.reset();
+      showToast(`${name} group added.`);
+      render();
+    })
+    .catch((error) => showToast(error.message));
 }
 
 async function updateAirline(event, airlineId) {
@@ -254,124 +302,92 @@ async function updateAirline(event, airlineId) {
   airline.group = form.airlineGroup.value;
 
   const videos = getAirlineVideos(airline);
-  await Promise.all(
-    videos.map(async (video) => {
-      const titleInput = form.elements[`videoTitle-${video.id}`];
-      const fileInput = form.elements[`videoFile-${video.id}`];
-      video.title = titleInput?.value.trim() || "";
+  await contentRequest({
+    action: "updateForm",
+    formId: airline.id,
+    videos: videos.map((video) => ({
+      id: video.id,
+      title: form.elements[`videoTitle-${video.id}`]?.value.trim() || "",
+    })),
+  });
 
-      const replacement = fileInput?.files?.[0];
-      if (replacement) {
-        video.videoName = replacement.name;
-        video.videoUrl = "indexeddb";
-        await saveVideo(video.id, replacement);
-        setCachedVideoUrl(video.id, replacement);
-      }
-    }),
-  );
+  for (const video of videos) {
+    const titleInput = form.elements[`videoTitle-${video.id}`];
+    const fileInput = form.elements[`videoFile-${video.id}`];
+    const replacement = fileInput?.files?.[0];
+    if (!replacement) continue;
+
+    const upload = await createSignedUpload(airline.id, replacement);
+    await uploadToSupabase(upload, replacement);
+    await contentRequest({
+      action: "confirmReplace",
+      videoId: video.id,
+      title: titleInput?.value.trim() || "",
+      fileName: replacement.name,
+      storagePath: upload.storagePath,
+    });
+  }
 
   const newVideoRows = Array.from(form.querySelectorAll("[data-new-video-row]"));
-  await Promise.all(
-    newVideoRows.map(async (row, index) => {
-      const newVideoFile = row.querySelector("[data-new-video-file]")?.files?.[0];
-      if (!newVideoFile) return;
+  for (const row of newVideoRows) {
+    const newVideoFile = row.querySelector("[data-new-video-file]")?.files?.[0];
+    if (!newVideoFile) continue;
 
-      const video = {
-        id: `video-${Date.now()}-${index}`,
-        title: row.querySelector("[data-new-video-title]")?.value.trim() || "",
-        videoName: newVideoFile.name,
-        videoUrl: "indexeddb",
-      };
-      airline.videos.push(video);
-      await saveVideo(video.id, newVideoFile);
-      setCachedVideoUrl(video.id, newVideoFile);
-    }),
-  );
+    const upload = await createSignedUpload(airline.id, newVideoFile);
+    await uploadToSupabase(upload, newVideoFile);
+    await contentRequest({
+      action: "confirmUpload",
+      formId: airline.id,
+      videoId: upload.videoId,
+      title: row.querySelector("[data-new-video-title]")?.value.trim() || "",
+      fileName: newVideoFile.name,
+      storagePath: upload.storagePath,
+    });
+  }
 
-  saveAirlines();
   showToast(`${airline.name} updated.`);
   render();
 }
 
-function openVideoDb() {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open("gops-video-store", 1);
-    request.onupgradeneeded = () => {
-      request.result.createObjectStore("videos");
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
+async function createSignedUpload(formId, file) {
+  return contentRequest({
+    action: "createUpload",
+    formId,
+    fileName: file.name,
+    contentType: file.type,
   });
 }
 
-async function saveVideo(id, file) {
-  const db = await openVideoDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction("videos", "readwrite");
-    tx.objectStore("videos").put(file, id);
-    tx.oncomplete = resolve;
-    tx.onerror = () => reject(tx.error);
-  });
-}
+async function uploadToSupabase(upload, file) {
+  if (!uploadClient) throw new Error("Video storage is not configured.");
 
-async function getVideo(id) {
-  const db = await openVideoDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction("videos", "readonly");
-    const request = tx.objectStore("videos").get(id);
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-}
+  const { error } = await uploadClient.storage
+    .from(state.content.supabase.bucket)
+    .uploadToSignedUrl(upload.path, upload.token, file, {
+      contentType: file.type || "video/mp4",
+    });
 
-async function removeVideo(id) {
-  const db = await openVideoDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction("videos", "readwrite");
-    tx.objectStore("videos").delete(id);
-    tx.oncomplete = resolve;
-    tx.onerror = () => reject(tx.error);
-  });
-}
-
-async function hydrateVideos() {
-  await Promise.all(
-    state.airlines.flatMap((airline) =>
-      getAirlineVideos(airline)
-        .filter((video) => video.videoUrl === "indexeddb")
-        .map(async (video) => {
-          const file = await getVideo(video.id);
-          if (file) setCachedVideoUrl(video.id, file);
-        }),
-    ),
-  );
-  render();
-}
-
-function setCachedVideoUrl(id, file) {
-  const existing = videoUrls.get(id);
-  if (existing) URL.revokeObjectURL(existing);
-  videoUrls.set(id, URL.createObjectURL(file));
+  if (error) throw new Error(error.message);
 }
 
 function deleteAirline(airlineId) {
-  state.airlines = state.airlines.filter((airline) => airline.id !== airlineId);
-  saveAirlines();
-  setView("admin");
-}
-
-async function deleteVideo(airlineId, videoId) {
   const airline = state.airlines.find((item) => item.id === airlineId);
   if (!airline) return;
 
-  airline.videos = getAirlineVideos(airline).filter((video) => video.id !== videoId);
-  await removeVideo(videoId);
+  contentRequest({
+    action: "deleteForm",
+    formId: airline.id,
+    groupId: airline.group,
+  })
+    .then(() => setView("admin"))
+    .catch((error) => showToast(error.message));
+}
 
-  const existing = videoUrls.get(videoId);
-  if (existing) URL.revokeObjectURL(existing);
-  videoUrls.delete(videoId);
-
-  saveAirlines();
+async function deleteVideo(airlineId, videoId) {
+  await contentRequest({
+    action: "deleteVideo",
+    videoId,
+  });
   showToast("Video removed.");
   render();
 }
@@ -500,8 +516,8 @@ function videoPlayerTemplate(video) {
       </div>
       <div class="video-panel">
         ${
-          videoUrls.get(video.id)
-            ? `<video src="${videoUrls.get(video.id)}" controls playsinline></video>`
+          video.videoUrl
+            ? `<video src="${escapeHtml(video.videoUrl)}" controls playsinline></video>`
             : `<div class="video-placeholder">Video not uploaded yet</div>`
         }
       </div>
@@ -761,6 +777,4 @@ function render() {
 }
 
 render();
-hydrateVideos().catch(() => {
-  showToast("Saved videos could not be loaded.");
-});
+loadRemoteContent();
