@@ -7,16 +7,14 @@ const defaultAirlines = [
     name: "KE",
     group: "oal",
     gateForms: ["Gate form"],
-    videoName: "",
-    videoUrl: "",
+    videos: [],
   },
   {
     id: "vj",
     name: "VJ",
     group: "vj",
     gateForms: ["Gate form"],
-    videoName: "",
-    videoUrl: "",
+    videos: [],
   },
 ];
 
@@ -39,14 +37,69 @@ function loadAirlines() {
 
   try {
     const parsed = JSON.parse(saved);
-    return Array.isArray(parsed) && parsed.length ? parsed : defaultAirlines;
+    return Array.isArray(parsed) && parsed.length ? parsed.map(normalizeAirline) : defaultAirlines;
   } catch {
     return defaultAirlines;
   }
 }
 
+function normalizeAirline(airline) {
+  if (Array.isArray(airline.videos)) {
+    return {
+      ...airline,
+      videos: airline.videos.map(normalizeVideo),
+    };
+  }
+
+  if (airline.videoUrl) {
+    return {
+      ...airline,
+      videos: [
+        {
+          id: airline.id,
+          title: "",
+          videoName: airline.videoName || "Uploaded video",
+          videoUrl: airline.videoUrl,
+        },
+      ],
+    };
+  }
+
+  return {
+    ...airline,
+    videos: [],
+  };
+}
+
+function normalizeVideo(video) {
+  return {
+    id: video.id || `video-${Date.now()}`,
+    title: video.title || "",
+    videoName: video.videoName || "",
+    videoUrl: video.videoUrl || "",
+  };
+}
+
+function getAirlineVideos(airline) {
+  airline.videos = Array.isArray(airline.videos) ? airline.videos.map(normalizeVideo) : [];
+  return airline.videos;
+}
+
 function saveAirlines() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state.airlines));
+}
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (character) => {
+    const entities = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+    };
+    return entities[character];
+  });
 }
 
 function setView(view, selectedAirlineId = null) {
@@ -116,8 +169,7 @@ function addAirline(event) {
     name,
     group,
     gateForms: [],
-    videoName: "No video uploaded",
-    videoUrl: "",
+    videos: [],
   });
   saveAirlines();
   form.reset();
@@ -134,12 +186,34 @@ async function updateAirline(event, airlineId) {
   airline.name = form.airlineName.value.trim().toUpperCase() || airline.name;
   airline.group = form.airlineGroup.value;
 
-  const videoFile = form.video.files[0];
-  if (videoFile) {
-    airline.videoName = videoFile.name;
-    airline.videoUrl = "indexeddb";
-    await saveVideo(airline.id, videoFile);
-    setCachedVideoUrl(airline.id, videoFile);
+  const videos = getAirlineVideos(airline);
+  await Promise.all(
+    videos.map(async (video) => {
+      const titleInput = form.elements[`videoTitle-${video.id}`];
+      const fileInput = form.elements[`videoFile-${video.id}`];
+      video.title = titleInput?.value.trim() || "";
+
+      const replacement = fileInput?.files?.[0];
+      if (replacement) {
+        video.videoName = replacement.name;
+        video.videoUrl = "indexeddb";
+        await saveVideo(video.id, replacement);
+        setCachedVideoUrl(video.id, replacement);
+      }
+    }),
+  );
+
+  const newVideoFile = form.newVideo.files[0];
+  if (newVideoFile) {
+    const video = {
+      id: `video-${Date.now()}`,
+      title: form.newVideoTitle.value.trim(),
+      videoName: newVideoFile.name,
+      videoUrl: "indexeddb",
+    };
+    airline.videos.push(video);
+    await saveVideo(video.id, newVideoFile);
+    setCachedVideoUrl(video.id, newVideoFile);
   }
 
   saveAirlines();
@@ -178,14 +252,26 @@ async function getVideo(id) {
   });
 }
 
+async function removeVideo(id) {
+  const db = await openVideoDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("videos", "readwrite");
+    tx.objectStore("videos").delete(id);
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
 async function hydrateVideos() {
   await Promise.all(
-    state.airlines
-      .filter((airline) => airline.videoUrl === "indexeddb")
-      .map(async (airline) => {
-        const file = await getVideo(airline.id);
-        if (file) setCachedVideoUrl(airline.id, file);
-      }),
+    state.airlines.flatMap((airline) =>
+      getAirlineVideos(airline)
+        .filter((video) => video.videoUrl === "indexeddb")
+        .map(async (video) => {
+          const file = await getVideo(video.id);
+          if (file) setCachedVideoUrl(video.id, file);
+        }),
+    ),
   );
   render();
 }
@@ -200,6 +286,22 @@ function deleteAirline(airlineId) {
   state.airlines = state.airlines.filter((airline) => airline.id !== airlineId);
   saveAirlines();
   setView("admin");
+}
+
+async function deleteVideo(airlineId, videoId) {
+  const airline = state.airlines.find((item) => item.id === airlineId);
+  if (!airline) return;
+
+  airline.videos = getAirlineVideos(airline).filter((video) => video.id !== videoId);
+  await removeVideo(videoId);
+
+  const existing = videoUrls.get(videoId);
+  if (existing) URL.revokeObjectURL(existing);
+  videoUrls.delete(videoId);
+
+  saveAirlines();
+  showToast("Video removed.");
+  render();
 }
 
 function showToast(message) {
@@ -269,11 +371,13 @@ function airlineListTemplate(group) {
 }
 
 function airlineCardTemplate(airline) {
+  const videos = getAirlineVideos(airline);
+
   return `
     <article class="airline-card">
       <button class="airline-button" data-airline="${airline.id}">
-        <span>${airline.name}</span>
-        <small>${airline.gateForms.length || 0} gate form${airline.gateForms.length === 1 ? "" : "s"}</small>
+        <span>${escapeHtml(airline.name)}</span>
+        <small>${videos.length} video${videos.length === 1 ? "" : "s"}</small>
       </button>
     </article>
   `;
@@ -281,6 +385,7 @@ function airlineCardTemplate(airline) {
 
 function airlineDetailTemplate(airline) {
   const pageTitle = airline.group === "oal" ? "OAL(excluding VJ)" : airline.name;
+  const videos = getAirlineVideos(airline);
 
   return `
     <main class="shell">
@@ -289,22 +394,34 @@ function airlineDetailTemplate(airline) {
         <header class="section-header">
           <div>
             <p class="eyebrow">Airline</p>
-            <h1>${pageTitle}</h1>
+            <h1>${escapeHtml(pageTitle)}</h1>
           </div>
           <button class="secondary-button" data-view="${airline.group}">Back</button>
         </header>
-        <div class="video-heading">
-          <h2>Walkthrough Video</h2>
-        </div>
-        <div class="video-panel">
-          ${
-            videoUrls.get(airline.id)
-              ? `<video src="${videoUrls.get(airline.id)}" controls playsinline></video>`
-              : `<div class="video-placeholder">Video not uploaded yet</div>`
-          }
-        </div>
+        ${
+          videos.length
+            ? videos.map(videoPlayerTemplate).join("")
+            : `<div class="video-panel"><div class="video-placeholder">Video not uploaded yet</div></div>`
+        }
       </section>
     </main>
+  `;
+}
+
+function videoPlayerTemplate(video) {
+  return `
+    <section class="video-section">
+      <div class="video-heading">
+        <h2>${escapeHtml(video.title || "Walkthrough Video")}</h2>
+      </div>
+      <div class="video-panel">
+        ${
+          videoUrls.get(video.id)
+            ? `<video src="${videoUrls.get(video.id)}" controls playsinline></video>`
+            : `<div class="video-placeholder">Video not uploaded yet</div>`
+        }
+      </div>
+    </section>
   `;
 }
 
@@ -357,7 +474,7 @@ function adminTemplate() {
           <div>
             <p class="eyebrow">Admin</p>
             <h1>Airline content</h1>
-            <p class="section-copy">Manage airline gate forms and replace training videos.</p>
+            <p class="section-copy">Manage airline categories and walkthrough videos.</p>
           </div>
         </header>
         <div class="admin-shell">
@@ -397,18 +514,20 @@ function adminTemplate() {
 }
 
 function adminAirlineTemplate(airline) {
+  const videos = getAirlineVideos(airline);
+
   return `
     <form class="admin-form compact-form" data-edit="${airline.id}">
       <div class="admin-form-header">
         <div>
           <p class="eyebrow">${airline.group === "vj" ? "VJ" : "OAL"}</p>
-          <h2>${airline.name}</h2>
+          <h2>${escapeHtml(airline.name)}</h2>
         </div>
         <button class="danger-button" type="button" data-delete="${airline.id}">Delete</button>
       </div>
       <label>
         Airline
-        <input name="airlineName" value="${airline.name}" />
+        <input name="airlineName" value="${escapeHtml(airline.name)}" />
       </label>
       <label>
         Category
@@ -417,13 +536,46 @@ function adminAirlineTemplate(airline) {
           <option value="vj" ${airline.group === "vj" ? "selected" : ""}>VJ</option>
         </select>
       </label>
-      <label>
-        Replace video
-        <input name="video" type="file" accept="video/*" />
-      </label>
-      <p class="file-status">${airline.videoName || "No video uploaded"}</p>
+      <div class="video-editor-list">
+        <p class="field-group-title">Videos</p>
+        ${
+          videos.length
+            ? videos.map((video) => adminVideoTemplate(airline, video)).join("")
+            : `<p class="file-status">No video uploaded</p>`
+        }
+      </div>
+      <section class="video-editor add-video-editor">
+        <p class="field-group-title">Add video</p>
+        <label>
+          Video title optional
+          <input name="newVideoTitle" placeholder="Walkthrough Video" />
+        </label>
+        <label>
+          Upload video
+          <input name="newVideo" type="file" accept="video/*" />
+        </label>
+      </section>
       <button class="secondary-button full-width" type="submit">Update</button>
     </form>
+  `;
+}
+
+function adminVideoTemplate(airline, video) {
+  return `
+    <section class="video-editor">
+      <div class="video-editor-header">
+        <strong>${escapeHtml(video.videoName || "Uploaded video")}</strong>
+        <button class="danger-button small-button" type="button" data-delete-video="${airline.id}:${video.id}">Remove</button>
+      </div>
+      <label>
+        Video title optional
+        <input name="videoTitle-${video.id}" value="${escapeHtml(video.title || "")}" placeholder="Walkthrough Video" />
+      </label>
+      <label>
+        Replace this video
+        <input name="videoFile-${video.id}" type="file" accept="video/*" />
+      </label>
+    </section>
   `;
 }
 
@@ -469,6 +621,13 @@ function bindEvents() {
 
   document.querySelectorAll("[data-delete]").forEach((button) => {
     button.addEventListener("click", () => deleteAirline(button.dataset.delete));
+  });
+
+  document.querySelectorAll("[data-delete-video]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const [airlineId, videoId] = button.dataset.deleteVideo.split(":");
+      deleteVideo(airlineId, videoId).catch(() => showToast("Video could not be removed."));
+    });
   });
 }
 

@@ -269,6 +269,11 @@ h2 {
   gap: 18px;
 }
 
+.video-section {
+  display: grid;
+  gap: 12px;
+}
+
 .video-heading h2 {
   margin: 0;
   font-size: clamp(1.4rem, 4vw, 2.3rem);
@@ -299,6 +304,50 @@ h2 {
   place-items: center;
   color: white;
   font-weight: 700;
+}
+
+.field-group-title {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.92rem;
+  font-weight: 800;
+}
+
+.video-editor-list {
+  display: grid;
+  gap: 10px;
+}
+
+.video-editor {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(245, 247, 251, 0.64);
+  padding: 12px;
+}
+
+.add-video-editor {
+  background: white;
+}
+
+.video-editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.video-editor-header strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.92rem;
+}
+
+.small-button {
+  min-height: 34px;
+  padding: 0 10px;
+  font-size: 0.82rem;
 }
 
 .admin-form {
