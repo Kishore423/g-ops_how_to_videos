@@ -7,6 +7,7 @@ const defaultAirlines = [
     name: "KE",
     group: "oal",
     gateForms: ["Gate form"],
+    videoTitle: "KE walkthrough video",
     videoName: "",
     videoUrl: "",
   },
@@ -15,6 +16,7 @@ const defaultAirlines = [
     name: "VJ",
     group: "vj",
     gateForms: ["Gate form"],
+    videoTitle: "VJ walkthrough video",
     videoName: "",
     videoUrl: "",
   },
@@ -116,6 +118,7 @@ function addAirline(event) {
     name,
     group,
     gateForms: [],
+    videoTitle: `${name} walkthrough video`,
     videoName: "No video uploaded",
     videoUrl: "",
   });
@@ -133,6 +136,7 @@ async function updateAirline(event, airlineId) {
 
   airline.name = form.airlineName.value.trim().toUpperCase() || airline.name;
   airline.group = form.airlineGroup.value;
+  airline.videoTitle = form.videoTitle.value.trim() || `${airline.name} walkthrough video`;
 
   const videoFile = form.video.files[0];
   if (videoFile) {
@@ -280,6 +284,8 @@ function airlineCardTemplate(airline) {
 }
 
 function airlineDetailTemplate(airline) {
+  const videoTitle = airline.videoTitle || `${airline.name} walkthrough video`;
+
   return `
     <main class="shell">
       ${topBarTemplate()}
@@ -291,6 +297,10 @@ function airlineDetailTemplate(airline) {
           </div>
           <button class="secondary-button" data-view="${airline.group}">Back</button>
         </header>
+        <div class="video-heading">
+          <p class="eyebrow">Walkthrough</p>
+          <h2>${videoTitle}</h2>
+        </div>
         <div class="video-panel">
           ${
             videoUrls.get(airline.id)
@@ -411,6 +421,10 @@ function adminAirlineTemplate(airline) {
           <option value="oal" ${airline.group === "oal" ? "selected" : ""}>OAL excluding VJ</option>
           <option value="vj" ${airline.group === "vj" ? "selected" : ""}>VJ</option>
         </select>
+      </label>
+      <label>
+        Video title
+        <input name="videoTitle" value="${airline.videoTitle || `${airline.name} walkthrough video`}" placeholder="Walkthrough video title" />
       </label>
       <label>
         Replace video
