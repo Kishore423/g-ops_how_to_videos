@@ -7,7 +7,6 @@ const defaultAirlines = [
     name: "KE",
     group: "oal",
     gateForms: ["Gate form"],
-    videoTitle: "KE walkthrough video",
     videoName: "",
     videoUrl: "",
   },
@@ -16,7 +15,6 @@ const defaultAirlines = [
     name: "VJ",
     group: "vj",
     gateForms: ["Gate form"],
-    videoTitle: "VJ walkthrough video",
     videoName: "",
     videoUrl: "",
   },
@@ -118,7 +116,6 @@ function addAirline(event) {
     name,
     group,
     gateForms: [],
-    videoTitle: `${name} walkthrough video`,
     videoName: "No video uploaded",
     videoUrl: "",
   });
@@ -136,7 +133,6 @@ async function updateAirline(event, airlineId) {
 
   airline.name = form.airlineName.value.trim().toUpperCase() || airline.name;
   airline.group = form.airlineGroup.value;
-  airline.videoTitle = form.videoTitle.value.trim() || `${airline.name} walkthrough video`;
 
   const videoFile = form.video.files[0];
   if (videoFile) {
@@ -222,7 +218,7 @@ function homeTemplate() {
         <p class="eyebrow">SATS operations</p>
         <h1 id="home-title">G-Ops forms</h1>
         <div class="home-actions">
-          <button class="primary-action" data-group-video="oal">OAL <span>excluding VJ</span></button>
+          <button class="primary-action" data-group-video="oal">OAL(excluding VJ)</button>
           <button class="primary-action alt" data-group-video="vj">VJ</button>
         </div>
       </section>
@@ -284,7 +280,7 @@ function airlineCardTemplate(airline) {
 }
 
 function airlineDetailTemplate(airline) {
-  const videoTitle = airline.videoTitle || `${airline.name} walkthrough video`;
+  const pageTitle = airline.group === "oal" ? "OAL(excluding VJ)" : airline.name;
 
   return `
     <main class="shell">
@@ -293,13 +289,12 @@ function airlineDetailTemplate(airline) {
         <header class="section-header">
           <div>
             <p class="eyebrow">Airline</p>
-            <h1>${airline.name}</h1>
+            <h1>${pageTitle}</h1>
           </div>
           <button class="secondary-button" data-view="${airline.group}">Back</button>
         </header>
         <div class="video-heading">
-          <p class="eyebrow">Walkthrough</p>
-          <h2>${videoTitle}</h2>
+          <h2>Walkthrough Video</h2>
         </div>
         <div class="video-panel">
           ${
@@ -421,10 +416,6 @@ function adminAirlineTemplate(airline) {
           <option value="oal" ${airline.group === "oal" ? "selected" : ""}>OAL excluding VJ</option>
           <option value="vj" ${airline.group === "vj" ? "selected" : ""}>VJ</option>
         </select>
-      </label>
-      <label>
-        Video title
-        <input name="videoTitle" value="${airline.videoTitle || `${airline.name} walkthrough video`}" placeholder="Walkthrough video title" />
       </label>
       <label>
         Replace video
