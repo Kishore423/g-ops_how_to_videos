@@ -213,28 +213,6 @@ async function loginAdmin(event) {
   render();
 }
 
-function addAirline(event) {
-  event.preventDefault();
-  const form = event.currentTarget;
-  const name = form.airlineName.value.trim().toUpperCase();
-  const group = form.airlineGroup.value;
-
-  if (!name) return;
-
-  const id = `${name.toLowerCase()}-${Date.now()}`;
-  state.airlines.push({
-    id,
-    name,
-    group,
-    gateForms: [],
-    videos: [],
-  });
-  saveAirlines();
-  form.reset();
-  showToast(`${name} added.`);
-  render();
-}
-
 function addGroup(event) {
   event.preventDefault();
   const form = event.currentTarget;
@@ -246,12 +224,21 @@ function addGroup(event) {
     id = `${id}-${Date.now()}`;
   }
 
+  const singleAirline = form.singleAirline.checked;
   state.groups.push({
     id,
     name,
-    singleAirline: form.singleAirline.checked,
+    singleAirline,
+  });
+  state.airlines.push({
+    id: `${id}-form`,
+    name,
+    group: id,
+    gateForms: [],
+    videos: [],
   });
   saveGroups();
+  saveAirlines();
   form.reset();
   showToast(`${name} group added.`);
   render();
@@ -588,28 +575,14 @@ function adminTemplate() {
               </label>
               <button class="primary-action compact" type="submit">Create form group</button>
             </form>
-            <form id="add-airline-form" class="admin-form">
-              <h2>Add airline</h2>
-              <label>
-                Airline code
-                <input name="airlineName" placeholder="KE" required />
-              </label>
-              <label>
-                Category
-                <select name="airlineGroup">
-                  ${groupOptionsTemplate()}
-                </select>
-              </label>
-              <button class="primary-action compact" type="submit">Add airline</button>
-            </form>
           </aside>
           <section class="admin-main" aria-labelledby="airline-list-title">
             <div class="admin-section-title">
               <div>
                 <p class="eyebrow">Library</p>
-                <h2 id="airline-list-title">Existing airlines</h2>
+                <h2 id="airline-list-title">Existing forms</h2>
               </div>
-              <span class="count-badge">${state.airlines.length} airline${state.airlines.length === 1 ? "" : "s"}</span>
+              <span class="count-badge">${state.airlines.length} form${state.airlines.length === 1 ? "" : "s"}</span>
             </div>
             <div class="admin-list">
               ${state.airlines.map(adminAirlineTemplate).join("")}
@@ -624,26 +597,29 @@ function adminTemplate() {
 function adminAirlineTemplate(airline) {
   const videos = getAirlineVideos(airline);
   const group = getGroup(airline.group);
+  const groupAirlines = getGroupAirlines(airline.group);
+  const showGroupOnly = group?.singleAirline || groupAirlines.length === 1;
+  const cardTitle = showGroupOnly ? group?.name || airline.name : airline.name;
 
   return `
     <form class="admin-form compact-form" data-edit="${airline.id}">
       <div class="admin-form-header">
         <div>
           <p class="eyebrow">${escapeHtml(group?.name || "Group")}</p>
-          <h2>${escapeHtml(airline.name)}</h2>
+          <h2>${escapeHtml(cardTitle)}</h2>
         </div>
         <button class="danger-button" type="button" data-delete="${airline.id}">Delete</button>
       </div>
-      <label>
-        Airline
-        <input name="airlineName" value="${escapeHtml(airline.name)}" />
-      </label>
-      <label>
-        Category
-        <select name="airlineGroup">
-          ${groupOptionsTemplate(airline.group)}
-        </select>
-      </label>
+      ${
+        showGroupOnly
+          ? `<input name="airlineName" type="hidden" value="${escapeHtml(airline.name)}" />
+             <input name="airlineGroup" type="hidden" value="${airline.group}" />`
+          : `<label>
+              Airline
+              <input name="airlineName" value="${escapeHtml(airline.name)}" />
+            </label>
+            <input name="airlineGroup" type="hidden" value="${airline.group}" />`
+      }
       <div class="video-editor-list">
         <p class="field-group-title">Videos</p>
         ${
@@ -659,18 +635,6 @@ function adminAirlineTemplate(airline) {
       <button class="secondary-button full-width" type="submit">Update</button>
     </form>
   `;
-}
-
-function groupOptionsTemplate(selectedGroup = state.groups[0]?.id) {
-  return state.groups
-    .map(
-      (group) => `
-        <option value="${group.id}" ${group.id === selectedGroup ? "selected" : ""}>
-          ${escapeHtml(group.name)}
-        </option>
-      `,
-    )
-    .join("");
 }
 
 function adminVideoTemplate(airline, video) {
@@ -741,7 +705,6 @@ function bindEvents() {
     event.currentTarget.setAttribute("title", shouldShow ? "Hide password" : "Show password");
   });
 
-  document.getElementById("add-airline-form")?.addEventListener("submit", addAirline);
   document.getElementById("add-group-form")?.addEventListener("submit", addGroup);
 
   document.querySelectorAll("[data-edit]").forEach((form) => {
