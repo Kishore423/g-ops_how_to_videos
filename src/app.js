@@ -203,18 +203,23 @@ async function updateAirline(event, airlineId) {
     }),
   );
 
-  const newVideoFile = form.newVideo.files[0];
-  if (newVideoFile) {
-    const video = {
-      id: `video-${Date.now()}`,
-      title: form.newVideoTitle.value.trim(),
-      videoName: newVideoFile.name,
-      videoUrl: "indexeddb",
-    };
-    airline.videos.push(video);
-    await saveVideo(video.id, newVideoFile);
-    setCachedVideoUrl(video.id, newVideoFile);
-  }
+  const newVideoRows = Array.from(form.querySelectorAll("[data-new-video-row]"));
+  await Promise.all(
+    newVideoRows.map(async (row, index) => {
+      const newVideoFile = row.querySelector("[data-new-video-file]")?.files?.[0];
+      if (!newVideoFile) return;
+
+      const video = {
+        id: `video-${Date.now()}-${index}`,
+        title: row.querySelector("[data-new-video-title]")?.value.trim() || "",
+        videoName: newVideoFile.name,
+        videoUrl: "indexeddb",
+      };
+      airline.videos.push(video);
+      await saveVideo(video.id, newVideoFile);
+      setCachedVideoUrl(video.id, newVideoFile);
+    }),
+  );
 
   saveAirlines();
   showToast(`${airline.name} updated.`);
@@ -544,23 +549,10 @@ function adminAirlineTemplate(airline) {
             : `<p class="file-status">No video uploaded</p>`
         }
       </div>
+      <div class="new-video-list" data-new-video-list="${airline.id}"></div>
       <button class="secondary-button full-width add-video-button" type="button" data-add-video="${airline.id}">
         Add video
       </button>
-      <section class="video-editor add-video-editor" data-add-video-panel="${airline.id}" hidden>
-        <div class="video-editor-header">
-          <p class="field-group-title">New video</p>
-          <button class="ghost-button small-button" type="button" data-cancel-video="${airline.id}">Cancel</button>
-        </div>
-        <label>
-          Video title optional
-          <input name="newVideoTitle" placeholder="Walkthrough Video" />
-        </label>
-        <label>
-          Upload video
-          <input name="newVideo" type="file" accept="video/*" />
-        </label>
-      </section>
       <button class="secondary-button full-width" type="submit">Update</button>
     </form>
   `;
@@ -580,6 +572,25 @@ function adminVideoTemplate(airline, video) {
       <label>
         Replace this video
         <input name="videoFile-${video.id}" type="file" accept="video/*" />
+      </label>
+    </section>
+  `;
+}
+
+function newVideoTemplate(id) {
+  return `
+    <section class="video-editor add-video-editor" data-new-video-row>
+      <div class="video-editor-header">
+        <p class="field-group-title">New video</p>
+        <button class="ghost-button small-button" type="button" data-remove-new-video="${id}">Cancel</button>
+      </div>
+      <label>
+        Video title optional
+        <input data-new-video-title placeholder="Walkthrough Video" />
+      </label>
+      <label>
+        Upload video
+        <input data-new-video-file type="file" accept="video/*" />
       </label>
     </section>
   `;
@@ -638,26 +649,21 @@ function bindEvents() {
 
   document.querySelectorAll("[data-add-video]").forEach((button) => {
     button.addEventListener("click", () => {
-      const panel = document.querySelector(`[data-add-video-panel="${button.dataset.addVideo}"]`);
-      if (!panel) return;
+      const list = document.querySelector(`[data-new-video-list="${button.dataset.addVideo}"]`);
+      if (!list) return;
 
-      panel.hidden = false;
-      button.hidden = true;
-      panel.querySelector("input")?.focus();
+      const id = `new-video-${Date.now()}`;
+      list.insertAdjacentHTML("beforeend", newVideoTemplate(id));
+      const row = list.lastElementChild;
+      row?.querySelector("input")?.focus();
     });
   });
 
-  document.querySelectorAll("[data-cancel-video]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const panel = document.querySelector(`[data-add-video-panel="${button.dataset.cancelVideo}"]`);
-      const addButton = document.querySelector(`[data-add-video="${button.dataset.cancelVideo}"]`);
-      if (!panel || !addButton) return;
-
-      panel.hidden = true;
-      addButton.hidden = false;
-      panel.querySelectorAll("input").forEach((input) => {
-        input.value = "";
-      });
+  document.querySelectorAll("[data-new-video-list]").forEach((list) => {
+    list.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-remove-new-video]");
+      if (!button) return;
+      button.closest("[data-new-video-row]")?.remove();
     });
   });
 }

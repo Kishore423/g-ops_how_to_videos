@@ -322,6 +322,11 @@ h2 {
   gap: 10px;
 }
 
+.new-video-list {
+  display: grid;
+  gap: 10px;
+}
+
 .video-editor {
   display: grid;
   gap: 12px;
